@@ -7,6 +7,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	patronerrors "github.com/beatlabs/patron/errors"
+	"github.com/beatlabs/patron/log"
 	"github.com/beatlabs/patron/trace"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -26,13 +27,9 @@ func (ap *AsyncProducer) Send(ctx context.Context, msg *sarama.ProducerMessage) 
 	sp, _ := trace.ChildSpan(ctx, trace.ComponentOpName(componentTypeAsync, msg.Topic), componentTypeAsync,
 		ext.SpanKindProducer, asyncTag, opentracing.Tag{Key: "topic", Value: msg.Topic})
 
-	err := injectTracingHeaders(msg, sp)
-	if err != nil {
-		statusCountInc(deliveryTypeAsync, deliveryStatusCreationError, msg.Topic)
-		trace.SpanError(sp)
-		return fmt.Errorf("failed to inject tracing headers: %w", err)
+	if err := injectTracingHeaders(msg, sp); err != nil {
+		log.FromContext(ctx).Fatalf("failed to inject tracing headers: %v", err)
 	}
-
 	ap.asyncProd.Input() <- msg
 	statusCountInc(deliveryTypeAsync, deliveryStatusSent, msg.Topic)
 	trace.SpanSuccess(sp)

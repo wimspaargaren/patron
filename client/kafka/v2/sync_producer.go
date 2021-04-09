@@ -6,6 +6,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	patronerrors "github.com/beatlabs/patron/errors"
+	"github.com/beatlabs/patron/log"
 	"github.com/beatlabs/patron/trace"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -24,11 +25,8 @@ func (p *SyncProducer) Send(ctx context.Context, msg *sarama.ProducerMessage) (p
 	sp, _ := trace.ChildSpan(ctx, trace.ComponentOpName(componentTypeSync, msg.Topic), componentTypeSync,
 		ext.SpanKindProducer, syncTag, opentracing.Tag{Key: "topic", Value: msg.Topic})
 
-	err = injectTracingHeaders(msg, sp)
-	if err != nil {
-		statusCountInc(deliveryTypeSync, deliveryStatusCreationError, msg.Topic)
-		trace.SpanError(sp)
-		return -1, -1, fmt.Errorf("failed to inject tracing headers: %w", err)
+	if err = injectTracingHeaders(msg, sp); err != nil {
+		log.FromContext(ctx).Errorf("failed to inject tracing headers: %v", err)
 	}
 
 	partition, offset, err = p.syncProd.SendMessage(msg)
